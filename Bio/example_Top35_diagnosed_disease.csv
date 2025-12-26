@@ -1,0 +1,21 @@
+term,gene_ratio,count,-log10(adjp)
+Immune Deficiency Disease,0.626774848,309,78.07814998
+Familial Cold Autoinflammatory Syndrome 3,0.356997972,176,62.00314821
+Hematologic Cancer,0.52535497,259,55.4226325
+Autism Spectrum Disorder,0.464503043,229,53.18898993
+"Leukemia, Acute Myeloid",0.379310345,187,47.39115222
+Epilepsy,0.432048682,213,46.19907343
+Inflammatory Bowel Disease,0.356997972,176,45.71441514
+Protein-Deficiency Anemia,0.397565923,196,43.16168078
+Bone Disease,0.425963489,210,41.29228451
+Severe Combined Immunodeficiency,0.277890467,137,39.87142293
+"Leukemia, Acute Lymphoblastic",0.330628803,163,39.76305213
+Prostate Cancer,0.31643002,156,31.81284994
+"Carnitine Palmitoyltransferase Ii Deficiency, Infantile",0.198782961,98,30.17524677
+Breast Cancer,0.257606491,127,29.62436187
+3-Methylcrotonyl-Coa Carboxylase Deficiency,0.190669371,94,29.33236278
+Lymphoma,0.235294118,116,28.58881869
+Leukoencephalopathy With Vanishing White Matter,0.184584178,91,28.31488139
+Retinal Disease,0.288032454,142,28.29681959
+Myelodysplastic Syndrome,0.219066937,108,27.38469871
+Leukemia,0.210953347,104,25.26243724
