@@ -1,8 +1,4 @@
 #!/usr/bin/env python
-# inference.py - 支持多文件、流式处理、多卡、精准 phrase embedding 提取
-## v11:精准对齐；但目前仅支持batch=1;注意力权重；phrase匹配扩大；修复dis难以匹配的问题；
-## 修改影响层面emb提取逻辑，改为最后一个token。;修复加权为phrase级别的重要性加权；修复attn的传入逻辑
-## 修复bf16报错;推理结果（score级）完全与swift eager pt 对齐。增加IG归因分析分数。
 import json
 import torch
 import argparse
@@ -19,18 +15,12 @@ import re
 from captum.attr import IntegratedGradients
 import numpy as np
 
-# -------------------------------
-# 配置日志
-# -------------------------------
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# -------------------------------
-# 参数解析
-# -------------------------------
 def parse_args():
     parser = argparse.ArgumentParser(description="Run LLM inference with hidden state and logprob extraction.")
 
@@ -52,9 +42,6 @@ def parse_args():
     parser.add_argument("--IGscore", action="store_true", help="extract IG scores.")
     return parser.parse_args()
 
-# -------------------------------
-# 加载数据（支持通配符）
-# -------------------------------
 def load_jsonl_files(file_pattern: str) -> Generator[Dict, None, None]:
     """支持 glob 通配符加载多个 jsonl 文件"""
     files = glob.glob(file_pattern)
@@ -73,23 +60,16 @@ def load_jsonl_files(file_pattern: str) -> Generator[Dict, None, None]:
                 except json.JSONDecodeError as e:
                     logger.warning(f"JSON decode error in {file_path} line {line_num}: {e}")
 
-# -------------------------------
-# 流式保存结果
-# -------------------------------
 def write_jsonl_stream(data_iter: Iterable[Dict], file_path: str):
     """流式写入，避免内存溢出"""
     with open(file_path, 'w', encoding='utf-8') as f:
         for item in data_iter:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
-# -------------------------------
-# 主推理类（精准 phrase 定位版）
-# -------------------------------
 class LLMInference:
     def __init__(self, args):
         self.args = args
 
-        # 自动选择 device_map
         if args.device is None:
             self.device_map = "auto" if torch.cuda.is_available() else None
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -99,7 +79,6 @@ class LLMInference:
 
         logger.info(f"Using device_map: {self.device_map}")
 
-        # 加载 tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
             args.model_path,
             use_fast=True,
@@ -108,14 +87,12 @@ class LLMInference:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # 确定 dtype
         if args.fp16:
             dtype = torch.float16
         else:
             dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float32
         logger.info(f"Loading model with dtype: {dtype}, device_map: {self.device_map}")
 
-        # 加载模型
         self.model = AutoModelForCausalLM.from_pretrained(
             args.model_path,
             device_map=self.device_map,
@@ -129,11 +106,6 @@ class LLMInference:
 
 
     def prepare_messages_for_swift_inference(self, messages):
-        """
-        模仿 Swift 的预处理行为：
-        - 对每条消息的 content 执行 strip()
-        - 但如果最后一条消息是 'assistant'，则跳过（不 strip 它）
-        """
         if not messages:
             return messages
 
@@ -151,13 +123,10 @@ class LLMInference:
     def extract_phrase_embeddings(self, input_ids, last_hidden_state, offset_mapping, prompt, messages, target_phrases,
                                   tokenizer, attentions=None, token_attributions=None, layer_id=-1):
         """
-        精准提取目标 phrase 的 embedding。
-        基于原始 messages['content'] 字符串，使用 tokenizer 的 offset_mapping 精确定位 token span。
-        返回：
             {
                 "phrase": {
                     "mean_embedding": [...],
-                    "token_embeddings": [[...], [...]],  # 分片
+                    "token_embeddings": [[...], [...]],
                     "token_indices": [5, 6],
                     "char_span": [20, 26],
                     "matched_tokens_count": 2
@@ -166,7 +135,6 @@ class LLMInference:
         """
         token_offsets = offset_mapping[0].cpu().tolist()  # (seq_len, 2)
 
-        # 只保留非 special token 的有效 offset
         valid_tokens = []
         for idx, (start, end) in enumerate(token_offsets):
             if start == 0 and end == 0:
@@ -174,7 +142,7 @@ class LLMInference:
             if 0 <= start < end <= len(prompt):
                 valid_tokens.append((idx, start, end))
         # print(f"Valid tokens: {len(valid_tokens)}")
-        # 注意力权重
+
         if attentions is not None:
             # layer_id = len(attentions)//2
             last_layer_attn = attentions[layer_id]  # (1, num_heads, out_seq, in_seq)
@@ -183,9 +151,8 @@ class LLMInference:
             # print(f"Output seq length: {last_layer_attn.shape[2]}")
             # print(f"prompt length: {input_ids.shape[1]}")
 
-            # 平均所有注意力头
+
             head_avg_attn = last_layer_attn.mean(dim=1)  # (1, out_seq, in_seq)
-            # 取指定输出 token 对输入的注意力
             in_attn_all = head_avg_attn[0, input_ids.shape[1], :]  # (in_seq,)
             # print(f"attn length before: {in_attn_all.shape[0]}")
             in_attn = in_attn_all[:input_ids.shape[1]]
@@ -196,7 +163,6 @@ class LLMInference:
 
         embeddings = {}
         for i, phrase in enumerate(target_phrases):
-            # 是否唯一标识(即最后一个)
             is_last = (i == len(target_phrases) - 1)
             if is_last:
                 # matched_token_indices = -1
@@ -218,7 +184,6 @@ class LLMInference:
 
                 matched_token_indices = []
                 for token_idx, tok_start, tok_end in valid_tokens:
-                    # 判断 token 是否与 phrase 区域重叠
                     if not (tok_start >= phrase_end or tok_end <= phrase_start):
                         matched_token_indices.append(token_idx)
 
@@ -227,23 +192,19 @@ class LLMInference:
                     embeddings[phrase] = None
                     continue
 
-            # 提取 hidden states
             phrase_hs = last_hidden_state[0, matched_token_indices, :]  # (k, H)
-            phrase_hs = torch.mean(phrase_hs, dim=0)  # (H,) 每个维度平均
+            phrase_hs = torch.mean(phrase_hs, dim=0)  # (H,) 
             phrase_hs = phrase_hs.float().cpu().numpy()
             # phrase_emb_mean = torch.mean(phrase_hs, dim=0).cpu().numpy()
 
-            # 提取对应注意力权重
             att_weights = in_attn[matched_token_indices].mean()  # (k,)
             att_weights = att_weights.cpu().numpy()
 
-            # 归因分析
             ig_score = None
             if token_attributions is not None:
                 ig_vals = token_attributions[0, matched_token_indices]  # [k]
                 ig_score = ig_vals.mean().item()
 
-            # 验证：解码这些 token 看是否合理
             matched_ids = input_ids[0, matched_token_indices]
             tokens = tokenizer.convert_ids_to_tokens(matched_ids)
 
@@ -261,7 +222,6 @@ class LLMInference:
         return embeddings
 
     def get_logprobs_from_scores(self, scores: tuple, generated_ids: torch.Tensor, input_ids: torch.Tensor):
-        """从 generate 的 scores 中计算 logprobs"""
         batch_size = generated_ids.shape[0]
         prompt_len = input_ids.shape[1]
         all_logprobs = []
@@ -290,7 +250,6 @@ class LLMInference:
         return all_logprobs
 
     def process_batch(self, messages_list: List[List[Dict]]) -> List[Dict]:
-        """处理一个 batch"""
         prompts = [
             self.tokenizer.apply_chat_template(self.prepare_messages_for_swift_inference(msgs), tokenize=False, add_generation_prompt=True)
             for msgs in messages_list
@@ -312,7 +271,6 @@ class LLMInference:
         offset_mapping = inputs["offset_mapping"]  # CPU tensor
 
         with torch.no_grad():
-            # 前向传播获取 hidden states
             outputs = self.model(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
@@ -320,7 +278,6 @@ class LLMInference:
             )
             last_hidden_state = outputs.hidden_states[-1]  # (B, seq_len, H)
             # last_hidden_state = outputs.last_hidden_state  # (B, seq_len, H)
-            # 生成 response
             generate_kwargs = {
                 "input_ids": input_ids,
                 "attention_mask": attention_mask,
@@ -335,8 +292,6 @@ class LLMInference:
             gen_outputs = self.model.generate(**generate_kwargs)
             generated_ids = gen_outputs.sequences
 
-            # IG计算
-            # 获取嵌入层
             if self.args.IGscore:
                 embedding_layer = self.model.get_input_embeddings()
                 def forward_func(input_embeddings):
@@ -354,7 +309,6 @@ class LLMInference:
                 input_embeddings = embedding_layer(input_ids)  # [B, seq_len, H]
                 baseline = torch.zeros_like(input_embeddings)
 
-                # 计算 IG attributions（只做一次）
                 attributions, _ = ig.attribute(
                     inputs=input_embeddings,
                     baselines=baseline,
@@ -362,15 +316,12 @@ class LLMInference:
                     n_steps=50,
                     return_convergence_delta=True
                 )
-                # 取 L2 范数 → 每个 token 一个 scalar
                 token_attributions = attributions.norm(dim=-1)  # [B, seq_len]
             else:
                 token_attributions = None
 
-            # 拼接 prompt + 生成的 token
             full_input_ids = generated_ids  # prompt + output token
 
-            # 重新前向传播，开启 attention 输出
             with torch.no_grad():
                 full_outputs = self.model(
                     input_ids=full_input_ids,
@@ -378,16 +329,11 @@ class LLMInference:
                     attention_mask=(generated_ids != self.tokenizer.pad_token_id).to(generated_ids.device)
                 )
 
-            # 验证 attentions
             # print(f"Type of full_outputs.attentions: {type(full_outputs.attentions)}")
             # print(f"Number of layers: {len(full_outputs.attentions)}")  # 应为模型层数，如 32
             # print(f"Last layer attention shape: {full_outputs.attentions[-1].shape}")  # 应为 (B, H, seq_len, seq_len)
-
-            # 转 fp32，防止数值下溢
             attentions_fp32 = tuple(attn.float().detach() for attn in full_outputs.attentions)
 
-
-        # 逐样本
         batch_results = []
         logprobs_list = self.get_logprobs_from_scores(gen_outputs.scores, generated_ids, input_ids)
         # print(f"Number of generation steps: {len(attentions_fp32)}")
@@ -398,7 +344,6 @@ class LLMInference:
             data1 = data0[i]
             cpra = data1["cpra"]
 
-            ### 处理phrase，IUIS特殊
             phrase_map = {
             "Clinvar database": "Clinvar database",
             "HGMD database": "HGMD database",
@@ -467,15 +412,7 @@ class LLMInference:
             prompt = prompts[i]
             #print(prompt)
             response = full_generated_text[len(prompt):].strip()
-            # 在 process_batch 中，对每个样本提取其对应的 attentions
-            # sample_attentions = []
-            # step_attns = attentions_fp32[0] #第一生成步
-            # for layer_attn in step_attns:  # 每层
-            #     # layer_attn.shape = (B, H, out, in)
-            #     sample_attentions.append(layer_attn[i:i+1])  # 保留 batch 维度 (1, H, out, in)
-            # sample_attentions=tuple(sample_attentions)
 
-            # 精准提取 phrase embeddings
             emb = self.extract_phrase_embeddings(
                 input_ids[i].unsqueeze(0),
                 last_hidden_state[i].unsqueeze(0),
@@ -500,9 +437,6 @@ class LLMInference:
 
         return batch_results
 
-# -------------------------------
-# 主函数
-# -------------------------------
 def main():
     args = parse_args()
     logger.info(f"Arguments: {args}")
