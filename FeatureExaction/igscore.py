@@ -368,10 +368,3 @@ def run_full_analysis(jsonl_path: str, output_dir: str = "plots", use_abs_ig: bo
     plot_pca_umap_from_category_df(df, output_dir)
 
     print(f"All analysis completed. Plots saved to '{output_dir}'")
-
-
-if __name__ == "__main__":
-    JSONL_PATH = "IG_2342.jsonl"
-    OUTPUT_DIR = "attribution_plots_v4"
-
-    run_full_analysis(JSONL_PATH, OUTPUT_DIR, use_abs_ig=True)
