@@ -43,7 +43,6 @@ def parse_args():
     return parser.parse_args()
 
 def load_jsonl_files(file_pattern: str) -> Generator[Dict, None, None]:
-    """支持 glob 通配符加载多个 jsonl 文件"""
     files = glob.glob(file_pattern)
     if not files:
         raise FileNotFoundError(f"No files match pattern: {file_pattern}")
@@ -61,7 +60,6 @@ def load_jsonl_files(file_pattern: str) -> Generator[Dict, None, None]:
                     logger.warning(f"JSON decode error in {file_path} line {line_num}: {e}")
 
 def write_jsonl_stream(data_iter: Iterable[Dict], file_path: str):
-    """流式写入，避免内存溢出"""
     with open(file_path, 'w', encoding='utf-8') as f:
         for item in data_iter:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
@@ -295,7 +293,6 @@ class LLMInference:
             if self.args.IGscore:
                 embedding_layer = self.model.get_input_embeddings()
                 def forward_func(input_embeddings):
-                    """IG 前向函数：输出 'positive' 类别的 logit"""
                     logits = self.model(inputs_embeds=input_embeddings,
                                         attention_mask=attention_mask).logits
                     last_token_logits = logits[:, -1, :]
@@ -328,17 +325,10 @@ class LLMInference:
                     output_attentions=True,
                     attention_mask=(generated_ids != self.tokenizer.pad_token_id).to(generated_ids.device)
                 )
-
-            # print(f"Type of full_outputs.attentions: {type(full_outputs.attentions)}")
-            # print(f"Number of layers: {len(full_outputs.attentions)}")  # 应为模型层数，如 32
-            # print(f"Last layer attention shape: {full_outputs.attentions[-1].shape}")  # 应为 (B, H, seq_len, seq_len)
             attentions_fp32 = tuple(attn.float().detach() for attn in full_outputs.attentions)
 
         batch_results = []
         logprobs_list = self.get_logprobs_from_scores(gen_outputs.scores, generated_ids, input_ids)
-        # print(f"Number of generation steps: {len(attentions_fp32)}")
-        # print(f"First step output length: {attentions_fp32[0][-1].shape[2]}")  # 应为 1
-        # print(f"Last step output length: {attentions_fp32[-1][-1].shape[2]}")
         for i in range(len(messages_list)):
             messages = messages_list[i]
             data1 = data0[i]
@@ -389,9 +379,7 @@ class LLMInference:
                     target_phrases.append(tmp)
                 except Exception as e:
                     print(f"Error processing '{phrase}': {e}")
-            ###
 
-            ###
             if self.args.IUIS:
                 data2 = messages[-7]["content"]
                 pattern = r'If\s+"([^"]+)"\s+is\s+on\s+the\s+IEI/PID\s+gene\s+list:\s+(yes|no)'
@@ -404,7 +392,6 @@ class LLMInference:
                     # print(f"Gene: {gene_name}, On list: {is_on_list}")
                 else:
                     print("Pattern not found")
-            ###
 
             target_phrases.append(cpra)
             # print(target_phrases)
