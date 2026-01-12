@@ -12,7 +12,6 @@ Inborn Errors of Immunity (IEI) encompass over 500 rare genetic disorders charac
 - **Top-10 Recall Performance**: Ensures a high recall rate of top-10 predictions.
 - **Emerging Gene-Disease Associations**: Capable of identifying new gene-disease relationships not covered in training data.
 - **Modular Architecture**: Designed for easy adaptation to other monogenic disorders.
-- **Open Source**: Released under the Apache 2.0 license to encourage community contribution and further development.
 
 ## License
 
