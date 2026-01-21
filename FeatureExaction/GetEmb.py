@@ -144,7 +144,7 @@ class LLMInference:
         if attentions is not None:
             # layer_id = len(attentions)//2
             last_layer_attn = attentions[layer_id]  # (1, num_heads, out_seq, in_seq)
-            # print(f"Attention dtype: {last_layer_attn.dtype}")  # 应为 torch.float32
+            # print(f"Attention dtype: {last_layer_attn.dtype}")
             # print(f"Attention shape: {last_layer_attn.shape}")
             # print(f"Output seq length: {last_layer_attn.shape[2]}")
             # print(f"prompt length: {input_ids.shape[1]}")
