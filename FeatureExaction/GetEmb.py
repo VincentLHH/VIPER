@@ -12,8 +12,10 @@ import os
 from typing import Generator, List, Dict, Any, Iterable
 import sys
 import re
-from captum.attr import IntegratedGradients
+from captum.attr import (LayerIntegratedGradients, LLMGradientAttribution,
+                         TextTokenInput, FeatureAblation, LLMAttribution)
 import numpy as np
+import matplotlib.pyplot as plt
 
 logging.basicConfig(
     level=logging.INFO,
