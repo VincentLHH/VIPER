@@ -291,29 +291,27 @@ class LLMInference:
             generated_ids = gen_outputs.sequences
 
         if self.args.IGscore:
+            input_len = input_ids.shape[-1]
+            first_gen_token_id = generated_ids[0, input_len].item()
+            first_gen_token_str = self.tokenizer.decode([first_gen_token_id], skip_special_tokens=False)
+            # print(f"First generated token: {first_gen_token_str}")
             embedding_layer = self.model.get_input_embeddings()
-            def forward_func(input_embeddings):
-                logits = self.model(inputs_embeds=input_embeddings,
-                                    attention_mask=attention_mask).logits
-                last_token_logits = logits[:, -1, :]
-                try:
-                    pos_id = self.tokenizer.encode("positive", add_special_tokens=False)[0]
-                except:
-                    pos_id = self.tokenizer.encode("Positive", add_special_tokens=False)[0]
-                return last_token_logits[:, pos_id]
-
-            ig = IntegratedGradients(forward_func)
-            input_embeddings = embedding_layer(input_ids)  # [B, seq_len, H]
-            baseline = torch.zeros_like(input_embeddings)
-
-            attributions, _ = ig.attribute(
-                inputs=input_embeddings,
-                baselines=baseline,
-                target=None,
-                n_steps=50,
-                return_convergence_delta=True
+            
+            lig = LayerIntegratedGradients(self.model, self.model.get_input_embeddings())
+            llm_attr = LLMGradientAttribution(lig, self.tokenizer)
+            inp = TextTokenInput(
+                prompts[0],
+                self.tokenizer,
+                skip_tokens=[]
             )
-            token_attributions = attributions.norm(dim=-1)  # [B, seq_len]
+            attr_res = llm_attr.attribute(
+                inp,
+                target=first_gen_token_str,
+                n_steps=50,
+                internal_batch_size=1,
+                return_convergence_delta=False
+            )
+            token_attributions = attr_res.seq_attr  # [1, seq_len]
         else:
             token_attributions = None
 
