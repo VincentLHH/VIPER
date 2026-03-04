@@ -409,7 +409,7 @@ class LLMInference:
                 target_phrases,
                 self.tokenizer,
                 attentions_fp32,
-                token_attributions[i].unsqueeze(0)
+                token_attributions[i].unsqueeze(0) if token_attributions else None
             )
 
             batch_results.append({
