@@ -13,6 +13,25 @@ Inborn Errors of Immunity (IEI) encompass over 500 rare genetic disorders charac
 - **Emerging Gene-Disease Associations**: Capable of identifying new gene-disease relationships not covered in training data.
 - **Modular Architecture**: Designed for easy adaptation to other monogenic disorders.
 
+## Environment Setup
+
+VIPER requires Python >= 3.10 and the `swift==3.6.0` package ([A framework for LLM fine-tuning and inference](https://github.com/modelscope/ms-swift)). We recommend using Conda to create a reproducible environment that works across different CPU architectures (x86_64, aarch64).
+
+### Files
+
+**`environment.yml`**
+```yaml
+name: viper
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.10
+  - pip
+  - pip:
+      - -r requirements.txt
+```
+
 ## License
 
 This project is licensed under the Apache License, Version 2.0 - see the [LICENSE](LICENSE) file for details.
