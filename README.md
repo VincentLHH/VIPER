@@ -4,18 +4,31 @@
 
 ## Overview
 
-Inborn Errors of Immunity (IEI) encompass over 500 rare genetic disorders characterized by significant phenotypic and genotypic heterogeneity, presenting substantial challenges for molecular diagnosis. Existing variant prioritization tools face limitations in interpreting complex genomic data alongside unstructured phenotypes, which restricts their diagnostic efficacy in clinical settings. VIPER (Variant Impact Predictor with Expert Reasoning) is an open-source Large Language Model (LLM) framework designed for pathogenicity prediction and phenotype-genotype association analysis in the context of rare diseases.
+VIPER (Variant Impact Predictor with Expert Reasoning) is an open-source
+research workflow for phenotype-aware prioritization of candidate variants in
+rare genetic disease. It combines structured genomic annotations, clinical
+phenotypes, ClinVar and HGMD evidence, an IUIS gene-list membership signal, and
+OMIM disease context in a supervised fine-tuned Qwen3-1.7B model.
 
-## Features
-
-- **High Diagnostic Yield**: Achieves up to 92.20% diagnostic yield in IEI patients.
-- **Top-10 Recall Performance**: Ensures a high recall rate of top-10 predictions.
-- **Emerging Gene-Disease Associations**: Capable of identifying new gene-disease relationships not covered in training data.
-- **Modular Architecture**: Designed for easy adaptation to other monogenic disorders.
+The accompanying study evaluates VIPER retrospectively in an inborn errors of
+immunity (IEI) cohort and an inherited retinal disease (IRD) panel cohort. In
+the evaluated cohorts, VIPER achieved 92.64% variant-level Top-10 recall in IEI
+and 98.92% in an IRD panel in which all test genes were represented in
+training. These results are research findings and do not constitute clinical
+validation or a diagnostic claim.
 
 ## Environment Setup
 
-VIPER requires Python >= 3.10 and the `swift==3.6.0` package ([A framework for LLM fine-tuning and inference](https://github.com/modelscope/ms-swift)). We recommend using Conda to create a reproducible environment that works across different CPU architectures (x86_64, aarch64).
+VIPER requires Python >= 3.10 and the dependencies in
+[`requirements.txt`](requirements.txt). The training and inference stack uses
+`swift==3.6.0`. Benchmark, statistical and plotting workflows additionally use
+[`requirements-analysis.txt`](requirements-analysis.txt). Conda users can
+create the complete environment with:
+
+```bash
+conda env create -f environment.yaml
+conda activate viper
+```
 
 ## Example Usage
 
@@ -75,6 +88,44 @@ swift infer \
 
 The predictions will be stored in the ./VIPER/infer_result/ folder. Each test variant includes the predicted pathogenicity label (positive/negative) and confidence score (0~1).
 
+## Reproducing reported confidence intervals
+
+`scripts/bootstrap_topk_ci.py` recomputes the Top-k confidence intervals from
+the evaluation tables. It uses the patient as the resampling cluster, 10,000
+percentile-bootstrap replicates, and a default random seed of 42. In each
+replicate, all causal variants from a sampled patient are carried together and
+variant-level denominators are recalculated.
+
+Full-cohort IEI and IRD intervals:
+
+```bash
+python scripts/bootstrap_topk_ci.py \
+  --iei-s2 /path/to/Supplementary\ Tables-20261022.xlsx \
+  --ird-summary /path/to/IRD/summary-62S.xlsx \
+  --output-dir results/ci
+```
+
+To additionally reproduce the IEI de-overlap analysis, provide the final
+training manifest and the IEI metadata table:
+
+```bash
+python scripts/bootstrap_topk_ci.py \
+  --iei-s2 /path/to/Supplementary\ Tables-20261022.xlsx \
+  --ird-summary /path/to/IRD/summary-62S.xlsx \
+  --iei-training-jsonl /path/to/Trainset-20250819.jsonl \
+  --iei-metadata-xlsx Eval/example_metadata.xlsx \
+  --output-dir results/ci
+```
+
+The command writes numeric TSV source tables corresponding to S3a/S3b/S3c,
+S5a/S5b, S15a/S15b/S15c and the VIPER positive-label intervals.
+
+## Tests
+
+```bash
+python -m pytest -q
+```
+
 ## License
 
 This project is licensed under the Apache License, Version 2.0 - see the [LICENSE](LICENSE) file for details.
@@ -85,4 +136,5 @@ For more information, please contact liuhaohan@genomics.cn.
 
 ---
 
-*VIPER represents a significant step forward in leveraging LLM-based approaches for accelerating molecular diagnosis across various rare disease contexts.*
+VIPER is intended for research use. Candidate calls require independent
+clinical interpretation and prospective validation.
