@@ -70,8 +70,31 @@ def _canonical_model_and_field(group: str, field: str) -> tuple[str, str] | None
 def _read_grouped_sheet(path: str, sheet_name: str) -> list[list[object]]:
     workbook = load_workbook(path, read_only=True, data_only=True)
     if sheet_name not in workbook.sheetnames:
+        workbook.close()
         raise KeyError(f"Sheet {sheet_name!r} not found in {path}.")
-    return [list(row) for row in workbook[sheet_name].iter_rows(values_only=True)]
+    try:
+        return [
+            list(row) for row in workbook[sheet_name].iter_rows(values_only=True)
+        ]
+    finally:
+        workbook.close()
+
+
+def _find_field_header_row(
+    rows: list[list[object]], required_fields: set[str]
+) -> int:
+    for row_index, row in enumerate(rows):
+        normalized = {
+            str(value).strip()
+            for value in row
+            if value not in (None, "")
+        }
+        if required_fields.issubset(normalized):
+            if row_index == 0:
+                raise ValueError("A group header row must precede the field header.")
+            return row_index
+    missing = ", ".join(sorted(required_fields))
+    raise KeyError(f"Input must contain {missing} fields.")
 
 
 def _load_grouped_ranks(
@@ -82,9 +105,9 @@ def _load_grouped_ranks(
     include_overlap: bool,
 ) -> pd.DataFrame:
     rows = _read_grouped_sheet(path, sheet_name)
-    if len(rows) < 3:
-        raise ValueError("Grouped workbook must contain two header rows and data.")
-    group_row, field_row = rows[0], rows[1]
+    field_header_index = _find_field_header_row(rows, {"case_ID", "cpra"})
+    group_row = rows[field_header_index - 1]
+    field_row = rows[field_header_index]
     width = max(len(group_row), len(field_row))
     groups: list[str] = []
     current_group = ""
@@ -98,8 +121,6 @@ def _load_grouped_ranks(
     for column, field in enumerate(field_row):
         if field not in (None, ""):
             fields[str(field).strip()] = column
-    if "case_ID" not in fields or "cpra" not in fields:
-        raise KeyError("Input must contain case_ID and cpra fields.")
 
     model_columns: dict[str, int] = {}
     positive_columns: dict[str, int] = {}
@@ -109,13 +130,15 @@ def _load_grouped_ranks(
             model_columns[mapped[0]] = column
         if field == "label" and group in {"VIPER"}:
             positive_columns["VIPER"] = column
+    if not model_columns:
+        raise KeyError("No model rank columns could be identified.")
 
     overlap_column = None
     if include_overlap and "training_overlap_any" in fields:
         overlap_column = fields["training_overlap_any"]
 
     records: list[dict[str, object]] = []
-    for row in rows[2:]:
+    for row in rows[field_header_index + 1 :]:
         if not row or row[fields["case_ID"]] in (None, ""):
             continue
         record: dict[str, object] = {

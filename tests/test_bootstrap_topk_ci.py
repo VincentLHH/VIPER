@@ -98,6 +98,21 @@ def _write_grouped_sheet(path, sheet_name, group_row, field_row, data_rows):
     workbook.save(path)
 
 
+def _write_grouped_sheet_with_title_and_note(
+    path, sheet_name, group_row, field_row, data_rows
+):
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = sheet_name
+    worksheet.append([f"Table {sheet_name}. Evaluation data."])
+    worksheet.append(["This row is a table note and must not be parsed as data."])
+    worksheet.append(group_row)
+    worksheet.append(field_row)
+    for row in data_rows:
+        worksheet.append(row)
+    workbook.save(path)
+
+
 def test_load_iei_s2_maps_model_blocks_and_missing_ranks(tmp_path):
     path = tmp_path / "iei.xlsx"
     _write_grouped_sheet(
@@ -147,6 +162,66 @@ def test_load_iei_s2_maps_model_blocks_and_missing_ranks(tmp_path):
     assert data.loc[0, "VIPER"] == 2
     assert np.isnan(data.loc[0, "Xrare observed"])
     assert data.loc[0, "Xrare rank-augmented"] == 8
+
+
+def test_load_iei_s2_tolerates_title_and_note_rows(tmp_path):
+    path = tmp_path / "iei_with_title.xlsx"
+    _write_grouped_sheet_with_title_and_note(
+        path,
+        "S2",
+        [
+            "Sample_info",
+            None,
+            None,
+            "VIPER",
+            None,
+            None,
+            "GeneT",
+            None,
+            None,
+        ],
+        [
+            "case_ID",
+            "cpra",
+            "Gene",
+            "label",
+            "score",
+            "rank",
+            "label",
+            "score",
+            "rank",
+        ],
+        [
+            ["P1", "chr1-1-A-C", "GENE1", "positive", 0.9, 2, "positive", 0.8, 3],
+        ],
+    )
+
+    data = load_iei_s2(path)
+
+    assert data.to_dict("records") == [
+        {
+            "patient_id": "P1",
+            "cpra": "chr1-1-A-C",
+            "gene": "GENE1",
+            "VIPER": 2,
+            "VIPER_positive": True,
+            "GeneT": 3,
+        }
+    ]
+
+
+def test_load_grouped_sheet_rejects_missing_required_header(tmp_path):
+    path = tmp_path / "invalid.xlsx"
+    _write_grouped_sheet(
+        path,
+        "S2",
+        ["Sample_info", "VIPER"],
+        ["patient_id", "rank"],
+        [["P1", 1]],
+    )
+
+    with pytest.raises(KeyError, match="case_ID"):
+        load_iei_s2(path)
 
 
 def test_load_ird_summary_maps_observed_rank_and_overlap_flag(tmp_path):

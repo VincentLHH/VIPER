@@ -100,7 +100,7 @@ Full-cohort IEI and IRD intervals:
 
 ```bash
 python scripts/bootstrap_topk_ci.py \
-  --iei-s2 /path/to/Supplementary\ Tables-20261022.xlsx \
+  --iei-s2 /path/to/Supplementary\ Tables-20261023.xlsx \
   --ird-summary /path/to/IRD/summary-62S.xlsx \
   --output-dir results/ci
 ```
@@ -110,7 +110,7 @@ training manifest and the IEI metadata table:
 
 ```bash
 python scripts/bootstrap_topk_ci.py \
-  --iei-s2 /path/to/Supplementary\ Tables-20261022.xlsx \
+  --iei-s2 /path/to/Supplementary\ Tables-20261023.xlsx \
   --ird-summary /path/to/IRD/summary-62S.xlsx \
   --iei-training-jsonl /path/to/Trainset-20250819.jsonl \
   --iei-metadata-xlsx Eval/example_metadata.xlsx \
