@@ -1,5 +1,27 @@
 #!/usr/bin/env python3
-"""Patient-cluster bootstrap confidence intervals for VIPER Top-k metrics."""
+r"""Compute patient-cluster bootstrap intervals for VIPER Top-k metrics.
+
+The patient is the resampling unit. In each replicate, all causal variants from
+each sampled patient are retained, and variant-level denominators are
+recalculated. Unless overridden, the script uses 10,000 percentile-bootstrap
+replicates and random seed 42. Paired model differences use identical patient
+draws for both methods.
+
+Required inputs are the IEI S2 sheet and/or the IRD summary workbook. To
+reproduce the IEI de-overlap analysis, also provide the final training JSONL
+and the IEI metadata workbook as shown below.
+
+Example:
+    python scripts/bootstrap_topk_ci.py \
+        --iei-s2 /path/to/Supplementary\ Tables-20261023.xlsx \
+        --ird-summary /path/to/IRD/summary-62S.xlsx \
+        --iei-training-jsonl /path/to/Trainset-20250819.jsonl \
+        --iei-metadata-xlsx Eval/example_metadata.xlsx \
+        --output-dir results/ci
+
+The output directory contains TSV tables corresponding to S3a/S3b/S3c,
+S5a/S5b, S15a/S15b/S15c, and the VIPER positive-call intervals.
+"""
 
 from __future__ import annotations
 

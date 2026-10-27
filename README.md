@@ -88,38 +88,6 @@ swift infer \
 
 The predictions will be stored in the ./VIPER/infer_result/ folder. Each test variant includes the predicted pathogenicity label (positive/negative) and confidence score (0~1).
 
-## Reproducing reported confidence intervals
-
-`scripts/bootstrap_topk_ci.py` recomputes the Top-k confidence intervals from
-the evaluation tables. It uses the patient as the resampling cluster, 10,000
-percentile-bootstrap replicates, and a default random seed of 42. In each
-replicate, all causal variants from a sampled patient are carried together and
-variant-level denominators are recalculated.
-
-Full-cohort IEI and IRD intervals:
-
-```bash
-python scripts/bootstrap_topk_ci.py \
-  --iei-s2 /path/to/Supplementary\ Tables-20261023.xlsx \
-  --ird-summary /path/to/IRD/summary-62S.xlsx \
-  --output-dir results/ci
-```
-
-To additionally reproduce the IEI de-overlap analysis, provide the final
-training manifest and the IEI metadata table:
-
-```bash
-python scripts/bootstrap_topk_ci.py \
-  --iei-s2 /path/to/Supplementary\ Tables-20261023.xlsx \
-  --ird-summary /path/to/IRD/summary-62S.xlsx \
-  --iei-training-jsonl /path/to/Trainset-20250819.jsonl \
-  --iei-metadata-xlsx Eval/example_metadata.xlsx \
-  --output-dir results/ci
-```
-
-The command writes numeric TSV source tables corresponding to S3a/S3b/S3c,
-S5a/S5b, S15a/S15b/S15c and the VIPER positive-label intervals.
-
 ## Tests
 
 ```bash
